@@ -1,0 +1,17 @@
+[project]
+name = "dayone-mcp"
+version = "1.0.0"
+description = "Read-only MCP server for Day One journal"
+authors = [{ name = "Day One MCP", email = "noreply@example.com" }]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = []
