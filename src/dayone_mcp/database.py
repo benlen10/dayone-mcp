@@ -170,13 +170,36 @@ class DayOneDatabase:
         conn.close()
         return entries
 
-    def search_entries(self, search_text: str, limit: int = 20, journal: Optional[str] = None) -> list[dict[str, Any]]:
-        """Search entries by text content.
+    def search_entries(
+        self,
+        text: Optional[str] = None,
+        tags: Optional[list[str]] = None,
+        starred: Optional[bool] = None,
+        has_photos: Optional[bool] = None,
+        has_videos: Optional[bool] = None,
+        has_audio: Optional[bool] = None,
+        has_location: Optional[bool] = None,
+        creation_device: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        journal: Optional[str] = None,
+        limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Search entries with flexible filters.
 
         Args:
-            search_text: Text to search for
+            text: Text to search for in entry content
+            tags: List of tags (entry must have ALL tags)
+            starred: Filter by starred status
+            has_photos: Filter entries with photo attachments
+            has_videos: Filter entries with video attachments
+            has_audio: Filter entries with audio recordings
+            has_location: Filter entries with location data
+            creation_device: Filter by device type (e.g., "iPhone", "MacBook Pro")
+            date_from: Start date (YYYY-MM-DD)
+            date_to: End date (YYYY-MM-DD)
+            journal: Journal name filter
             limit: Maximum results (1-50)
-            journal: Optional journal name filter
 
         Returns:
             List of matching entries
@@ -186,8 +209,9 @@ class DayOneDatabase:
         conn = self._connect()
         cursor = conn.cursor()
 
+        # Base query
         query = """
-            SELECT
+            SELECT DISTINCT
                 e.ZUUID as uuid,
                 e.ZRICHTEXTJSON as rich_text,
                 e.ZMARKDOWNTEXT as markdown_text,
@@ -198,20 +222,110 @@ class DayOneDatabase:
                 j.ZNAME as journal_name
             FROM ZENTRY e
             LEFT JOIN ZJOURNAL j ON e.ZJOURNAL = j.Z_PK
-            WHERE (e.ZRICHTEXTJSON LIKE ? OR e.ZMARKDOWNTEXT LIKE ?)
         """
 
-        params = [f'%{search_text}%', f'%{search_text}%']
+        conditions = []
+        params = []
 
+        # Text search
+        if text:
+            conditions.append("(e.ZRICHTEXTJSON LIKE ? OR e.ZMARKDOWNTEXT LIKE ?)")
+            params.extend([f'%{text}%', f'%{text}%'])
+
+        # Starred filter
+        if starred is not None:
+            conditions.append("e.ZSTARRED = ?")
+            params.append(1 if starred else 0)
+
+        # Location filter
+        if has_location is not None:
+            if has_location:
+                conditions.append("e.ZLOCATION IS NOT NULL")
+            else:
+                conditions.append("e.ZLOCATION IS NULL")
+
+        # Device filter
+        if creation_device:
+            conditions.append("e.ZCREATIONDEVICETYPE = ?")
+            params.append(creation_device)
+
+        # Date range filters
+        if date_from:
+            try:
+                date_obj = datetime.strptime(date_from, '%Y-%m-%d')
+                timestamp = date_obj.timestamp() - self.CORE_DATA_EPOCH
+                conditions.append("e.ZCREATIONDATE >= ?")
+                params.append(timestamp)
+            except ValueError:
+                pass  # Skip invalid dates
+
+        if date_to:
+            try:
+                date_obj = datetime.strptime(date_to, '%Y-%m-%d')
+                # Add one day to include the entire end date
+                end_of_day = date_obj.timestamp() + 86400 - self.CORE_DATA_EPOCH
+                conditions.append("e.ZCREATIONDATE < ?")
+                params.append(end_of_day)
+            except ValueError:
+                pass  # Skip invalid dates
+
+        # Journal filter
         if journal:
-            query += " AND j.ZNAME = ?"
+            conditions.append("j.ZNAME = ?")
             params.append(journal)
 
+        # Media filters (using subqueries)
+        if has_photos:
+            conditions.append("""
+                EXISTS (
+                    SELECT 1 FROM ZATTACHMENT a
+                    WHERE a.ZENTRY = e.Z_PK
+                    AND a.ZTYPE IN ('jpeg', 'png')
+                )
+            """)
+
+        if has_videos:
+            conditions.append("""
+                EXISTS (
+                    SELECT 1 FROM ZATTACHMENT a
+                    WHERE a.ZENTRY = e.Z_PK
+                    AND a.ZTYPE IN ('mp4', 'mov')
+                )
+            """)
+
+        if has_audio:
+            conditions.append("""
+                EXISTS (
+                    SELECT 1 FROM ZATTACHMENT a
+                    WHERE a.ZENTRY = e.Z_PK
+                    AND a.ZISRECORDING = 1
+                )
+            """)
+
+        # Tag filters (entry must have ALL specified tags)
+        if tags:
+            for tag in tags:
+                conditions.append("""
+                    EXISTS (
+                        SELECT 1 FROM ZTAG t
+                        JOIN Z_16TAGS zt ON t.Z_PK = zt.Z_60TAGS1
+                        WHERE zt.Z_16ENTRIES = e.Z_PK
+                        AND t.ZNAME = ?
+                    )
+                """)
+                params.append(tag)
+
+        # Build WHERE clause
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+
+        # Order and limit
         query += " ORDER BY e.ZCREATIONDATE DESC LIMIT ?"
         params.append(limit)
 
         cursor.execute(query, params)
 
+        # Build results
         entries = []
         for row in cursor.fetchall():
             entry = {

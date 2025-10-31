@@ -68,6 +68,9 @@ Once configured, you can interact with Day One through natural language:
 
 - **"Show me my recent journal entries"** - View latest entries
 - **"Search my journal for entries about vacation"** - Full-text search
+- **"Find starred entries tagged work from last month"** - Advanced filtered search
+- **"Show me all entries with photos from my iPhone"** - Media and device filter
+- **"Find vacation entries with location data"** - Combined filters
 - **"List my Day One journals"** - See all journals with stats
 - **"How many entries do I have?"** - Get total entry count
 - **"What did I write on June 14th in past years?"** - "On This Day" feature
@@ -84,14 +87,28 @@ Read recent journal entries with metadata and **text preview** (200 character li
 **Note:** Returns preview only to avoid overwhelming the display.
 
 ### `search_entries`
-Search journal entries by text content, returns **text preview** (200 character limit).
+Search journal entries with flexible filters, returns **text preview** (200 character limit).
 
 **Parameters:**
-- `search_text`: Text to search for
-- `limit` (optional): Number of results (1-50, default: 20)
+- `text` (optional): Text to search for in entry content
+- `tags` (optional): List of tags (entry must have ALL tags)
+- `starred` (optional): Filter by starred status (true/false)
+- `has_photos` (optional): Filter entries with photo attachments
+- `has_videos` (optional): Filter entries with video attachments
+- `has_audio` (optional): Filter entries with audio recordings
+- `has_location` (optional): Filter entries with location data
+- `creation_device` (optional): Device type (e.g., "iPhone", "MacBook Pro", "iPad")
+- `date_from` (optional): Start date (YYYY-MM-DD format)
+- `date_to` (optional): End date (YYYY-MM-DD format)
 - `journal` (optional): Filter by journal name
+- `limit` (optional): Number of results (1-50, default: 20)
 
-**Note:** Returns preview only. Use `get_entries_by_date` for full text.
+**All filters use AND logic** - results must match all specified criteria.
+
+**Examples:**
+- Find starred entries with photos: `starred=true, has_photos=true`
+- Find work entries from iPhone last month: `tags=["work"], creation_device="iPhone", date_from="2025-01-01", date_to="2025-01-31"`
+- Find vacation entries with location: `text="vacation", has_location=true`
 
 ### `list_journals`
 List all journals with entry counts and statistics.

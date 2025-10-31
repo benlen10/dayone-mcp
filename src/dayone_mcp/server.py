@@ -18,9 +18,18 @@ class ReadRecentEntriesArgs(BaseModel):
 
 
 class SearchEntriesArgs(BaseModel):
-    search_text: str = Field(description="Text to search for in entries")
+    text: str = Field(default="", description="Text to search for in entry content")
+    tags: list[str] = Field(default=[], description="Tags to filter by (entry must have ALL tags)")
+    starred: bool | None = Field(default=None, description="Filter by starred status (true/false/null)")
+    has_photos: bool | None = Field(default=None, description="Filter entries with photos")
+    has_videos: bool | None = Field(default=None, description="Filter entries with videos")
+    has_audio: bool | None = Field(default=None, description="Filter entries with audio recordings")
+    has_location: bool | None = Field(default=None, description="Filter entries with location data")
+    creation_device: str = Field(default="", description="Device type (e.g., 'iPhone', 'MacBook Pro')")
+    date_from: str = Field(default="", description="Start date YYYY-MM-DD")
+    date_to: str = Field(default="", description="End date YYYY-MM-DD")
+    journal: str = Field(default="", description="Journal name to filter by")
     limit: int = Field(default=20, ge=1, le=50, description="Number of results (1-50)")
-    journal: str = Field(default="", description="Optional journal name to filter by")
 
 
 class ListJournalsArgs(BaseModel):
@@ -88,7 +97,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="search_entries",
-            description="Search journal entries by text content, returns preview (200 char limit)",
+            description="Search entries with flexible filters: text, tags, starred, photos/videos/audio, location, device, date range. Returns preview (200 char limit)",
             inputSchema=SearchEntriesArgs.model_json_schema()
         ),
         Tool(
@@ -132,19 +141,53 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
 
         elif name == "search_entries":
             args = SearchEntriesArgs(**arguments)
-            journal = args.journal if args.journal else None
+
+            # Call database with all filter parameters
             entries = db.search_entries(
-                search_text=args.search_text,
-                limit=args.limit,
-                journal=journal
+                text=args.text if args.text else None,
+                tags=args.tags if args.tags else None,
+                starred=args.starred,
+                has_photos=args.has_photos,
+                has_videos=args.has_videos,
+                has_audio=args.has_audio,
+                has_location=args.has_location,
+                creation_device=args.creation_device if args.creation_device else None,
+                date_from=args.date_from if args.date_from else None,
+                date_to=args.date_to if args.date_to else None,
+                journal=args.journal if args.journal else None,
+                limit=args.limit
             )
 
             if not entries:
-                return [TextContent(type="text", text=f"No entries found matching '{args.search_text}'.")]
+                return [TextContent(type="text", text="No entries found matching the specified filters.")]
 
-            header = f"Found {len(entries)} entries matching '{args.search_text}'"
-            if journal:
-                header += f" in journal '{journal}'"
+            # Build descriptive header
+            header = f"Found {len(entries)} entries"
+            filters = []
+            if args.text:
+                filters.append(f"text: '{args.text}'")
+            if args.tags:
+                filters.append(f"tags: {', '.join(args.tags)}")
+            if args.starred is not None:
+                filters.append(f"starred: {args.starred}")
+            if args.has_photos:
+                filters.append("with photos")
+            if args.has_videos:
+                filters.append("with videos")
+            if args.has_audio:
+                filters.append("with audio")
+            if args.has_location is not None:
+                filters.append(f"location: {args.has_location}")
+            if args.creation_device:
+                filters.append(f"device: {args.creation_device}")
+            if args.date_from or args.date_to:
+                date_range = f"{args.date_from or '...'} to {args.date_to or '...'}"
+                filters.append(f"dates: {date_range}")
+            if args.journal:
+                filters.append(f"journal: {args.journal}")
+
+            if filters:
+                header += f" ({', '.join(filters)})"
 
             result = [header + ":\n"]
             result.extend(format_entry(entry) + "\n" for entry in entries)
