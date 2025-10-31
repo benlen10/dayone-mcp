@@ -75,19 +75,23 @@ Once configured, you can interact with Day One through natural language:
 ## Available Tools
 
 ### `read_recent_entries`
-Read recent journal entries with full text and metadata.
+Read recent journal entries with metadata and **text preview** (200 character limit).
 
 **Parameters:**
 - `limit` (optional): Number of entries (1-50, default: 10)
 - `journal` (optional): Filter by journal name
 
+**Note:** Returns preview only to avoid overwhelming the display.
+
 ### `search_entries`
-Search journal entries by text content.
+Search journal entries by text content, returns **text preview** (200 character limit).
 
 **Parameters:**
 - `search_text`: Text to search for
 - `limit` (optional): Number of results (1-50, default: 20)
 - `journal` (optional): Filter by journal name
+
+**Note:** Returns preview only. Use `get_entries_by_date` for full text.
 
 ### `list_journals`
 List all journals with entry counts and statistics.
@@ -99,11 +103,13 @@ Get total number of entries.
 - `journal` (optional): Filter by journal name
 
 ### `get_entries_by_date`
-Get "On This Day" entries from previous years.
+Get "On This Day" entries from previous years with **FULL entry text** (no preview limit).
 
 **Parameters:**
 - `target_date`: Date in MM-DD or YYYY-MM-DD format (e.g., "06-14")
 - `years_back` (optional): Years to search back (1-20, default: 5)
+
+**Note:** Returns complete entry text for historical reflection and analysis.
 
 ## Database Location
 
@@ -138,11 +144,14 @@ uv sync
 # Run server directly (for testing)
 uv run python -m dayone_mcp.server
 
-# Format code
-uv run ruff format .
+# Run tests
+uv run python tests/test_database.py
 
-# Type check
-uv run mypy .
+# Test date-based queries
+uv run python tests/test_date_entries.py
+
+# Test full text display
+uv run python tests/test_full_text.py
 ```
 
 ## Project Structure
@@ -154,8 +163,14 @@ dayone-mcp/
 │       ├── __init__.py       # Package metadata
 │       ├── database.py       # Database access layer
 │       └── server.py         # MCP server implementation
+├── tests/
+│   ├── test_database.py      # Database connection tests
+│   ├── test_date_entries.py  # Date query tests
+│   └── test_full_text.py     # Text extraction tests
 ├── pyproject.toml            # Project configuration
-└── README.md                 # This file
+├── README.md                 # This file
+├── CLAUDE.md                 # Claude Code guidance
+└── BEEKEEPER_GUIDE.md        # Beekeeper Studio SQL guide
 ```
 
 ## License

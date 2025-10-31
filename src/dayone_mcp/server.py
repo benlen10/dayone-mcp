@@ -41,8 +41,13 @@ app = Server("dayone-mcp")
 db = DayOneDatabase()
 
 
-def format_entry(entry: dict[str, Any]) -> str:
-    """Format an entry for display."""
+def format_entry(entry: dict[str, Any], full_text: bool = False) -> str:
+    """Format an entry for display.
+
+    Args:
+        entry: Entry dictionary with metadata and text
+        full_text: If True, show full entry text. If False, limit to 200 chars preview.
+    """
     lines = [
         f"📝 {entry['creation_date'].strftime('%Y-%m-%d %H:%M')}",
         f"Journal: {entry['journal_name']}"
@@ -60,11 +65,14 @@ def format_entry(entry: dict[str, Any]) -> str:
     if entry.get('years_ago') is not None and entry['years_ago'] > 0:
         lines.append(f"({entry['years_ago']} year{'s' if entry['years_ago'] > 1 else ''} ago)")
 
-    # Add text preview (first 200 chars)
+    # Add text (full or preview)
     text = entry['text']
     if text:
-        preview = text[:200] + "..." if len(text) > 200 else text
-        lines.append(f"\n{preview}")
+        if full_text:
+            lines.append(f"\n{text}")
+        else:
+            preview = text[:200] + "..." if len(text) > 200 else text
+            lines.append(f"\n{preview}")
 
     return '\n'.join(lines)
 
@@ -75,12 +83,12 @@ async def list_tools() -> list[Tool]:
     return [
         Tool(
             name="read_recent_entries",
-            description="Read recent journal entries with full text and metadata",
+            description="Read recent journal entries with metadata and text preview (200 char limit)",
             inputSchema=ReadRecentEntriesArgs.model_json_schema()
         ),
         Tool(
             name="search_entries",
-            description="Search journal entries by text content",
+            description="Search journal entries by text content, returns preview (200 char limit)",
             inputSchema=SearchEntriesArgs.model_json_schema()
         ),
         Tool(
@@ -95,7 +103,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_entries_by_date",
-            description="Get 'On This Day' entries from previous years for a specific date",
+            description="Get 'On This Day' entries from previous years with FULL entry text (no preview limit)",
             inputSchema=GetEntriesByDateArgs.model_json_schema()
         )
     ]
@@ -206,7 +214,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                     result.append(f"\n🗓️  {year} ({years_ago} years ago):")
 
                 for entry in year_entries:
-                    result.append(format_entry(entry) + "\n")
+                    result.append(format_entry(entry, full_text=True) + "\n")
 
             return [TextContent(type="text", text='\n'.join(result))]
 

@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """Simple test script to verify database access."""
 
+import sys
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from src.dayone_mcp.database import DayOneDatabase
 
 
