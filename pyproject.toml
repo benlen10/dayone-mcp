@@ -2,7 +2,7 @@
 name = "dayone-mcp"
 version = "1.0.0"
 description = "Read-only MCP server for Day One journal"
-authors = [{ name = "Day One MCP", email = "noreply@example.com" }]
+authors = [{ name = "Day One MCP", email = "ben2lening@gmail.com" }]
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
