@@ -12,11 +12,6 @@ from .database import DayOneDatabase
 
 
 # Tool argument schemas
-class ReadRecentEntriesArgs(BaseModel):
-    limit: int = Field(default=10, ge=1, le=50, description="Number of entries to return (1-50)")
-    journal: str = Field(default="", description="Optional journal name to filter by")
-
-
 class SearchEntriesArgs(BaseModel):
     text: str = Field(default="", description="Text to search for in entry content")
     tags: list[str] = Field(default=[], description="Tags to filter by (entry must have ALL tags)")
@@ -34,15 +29,6 @@ class SearchEntriesArgs(BaseModel):
 
 class ListJournalsArgs(BaseModel):
     pass
-
-
-class GetEntryCountArgs(BaseModel):
-    journal: str = Field(default="", description="Optional journal name to count entries for")
-
-
-class GetEntriesByDateArgs(BaseModel):
-    target_date: str = Field(description="Date in MM-DD or YYYY-MM-DD format (e.g., '06-14')")
-    years_back: int = Field(default=5, ge=1, le=20, description="Years to search back (1-20)")
 
 
 # Initialize server and database
@@ -91,29 +77,14 @@ async def list_tools() -> list[Tool]:
     """List available MCP tools."""
     return [
         Tool(
-            name="read_recent_entries",
-            description="Read recent journal entries with metadata and text preview (200 char limit)",
-            inputSchema=ReadRecentEntriesArgs.model_json_schema()
-        ),
-        Tool(
             name="search_entries",
-            description="Search entries with flexible filters: text, tags, starred, photos/videos/audio, location, device, date range. Returns preview (200 char limit)",
+            description="Search/browse Day One entries with flexible filters: text, tags, starred, photos/videos/audio, location, device, date range, journal. Returns FULL entry text and metadata. Use with no filters to browse recent entries.",
             inputSchema=SearchEntriesArgs.model_json_schema()
         ),
         Tool(
             name="list_journals",
-            description="List all journals with entry counts and statistics",
+            description="List all Day One journals with entry counts and statistics",
             inputSchema=ListJournalsArgs.model_json_schema()
-        ),
-        Tool(
-            name="get_entry_count",
-            description="Get total number of entries, optionally filtered by journal",
-            inputSchema=GetEntryCountArgs.model_json_schema()
-        ),
-        Tool(
-            name="get_entries_by_date",
-            description="Get 'On This Day' entries from previous years with FULL entry text (no preview limit)",
-            inputSchema=GetEntriesByDateArgs.model_json_schema()
         )
     ]
 
@@ -122,24 +93,7 @@ async def list_tools() -> list[Tool]:
 async def call_tool(name: str, arguments: Any) -> list[TextContent]:
     """Handle tool calls."""
     try:
-        if name == "read_recent_entries":
-            args = ReadRecentEntriesArgs(**arguments)
-            journal = args.journal if args.journal else None
-            entries = db.read_recent_entries(limit=args.limit, journal=journal)
-
-            if not entries:
-                return [TextContent(type="text", text="No entries found.")]
-
-            header = f"Found {len(entries)} recent entries"
-            if journal:
-                header += f" in journal '{journal}'"
-
-            result = [header + ":\n"]
-            result.extend(format_entry(entry) + "\n" for entry in entries)
-
-            return [TextContent(type="text", text='\n'.join(result))]
-
-        elif name == "search_entries":
+        if name == "search_entries":
             args = SearchEntriesArgs(**arguments)
 
             # Call database with all filter parameters
@@ -190,7 +144,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                 header += f" ({', '.join(filters)})"
 
             result = [header + ":\n"]
-            result.extend(format_entry(entry) + "\n" for entry in entries)
+            result.extend(format_entry(entry, full_text=True) + "\n" for entry in entries)
 
             return [TextContent(type="text", text='\n'.join(result))]
 
@@ -208,56 +162,6 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                     f"   Entries: {journal['entry_count']}\n"
                     f"   Last entry: {last_entry}\n"
                 )
-
-            return [TextContent(type="text", text='\n'.join(result))]
-
-        elif name == "get_entry_count":
-            args = GetEntryCountArgs(**arguments)
-            journal = args.journal if args.journal else None
-            count = db.get_entry_count(journal=journal)
-
-            if journal:
-                text = f"Journal '{journal}' has {count} entries."
-            else:
-                text = f"Total entries: {count}"
-
-            return [TextContent(type="text", text=text)]
-
-        elif name == "get_entries_by_date":
-            args = GetEntriesByDateArgs(**arguments)
-            entries = db.get_entries_by_date(
-                target_date=args.target_date,
-                years_back=args.years_back
-            )
-
-            if not entries:
-                return [TextContent(
-                    type="text",
-                    text=f"No entries found for {args.target_date} in the past {args.years_back} years."
-                )]
-
-            # Group by year
-            by_year = {}
-            for entry in entries:
-                year = entry['year']
-                if year not in by_year:
-                    by_year[year] = []
-                by_year[year].append(entry)
-
-            result = [f"📅 On This Day ({args.target_date}) - Found {len(entries)} entries:\n"]
-
-            for year in sorted(by_year.keys(), reverse=True):
-                year_entries = by_year[year]
-                years_ago = year_entries[0]['years_ago']
-                if years_ago == 0:
-                    result.append(f"\n🗓️  {year} (This year):")
-                elif years_ago == 1:
-                    result.append(f"\n🗓️  {year} (1 year ago):")
-                else:
-                    result.append(f"\n🗓️  {year} ({years_ago} years ago):")
-
-                for entry in year_entries:
-                    result.append(format_entry(entry, full_text=True) + "\n")
 
             return [TextContent(type="text", text='\n'.join(result))]
 

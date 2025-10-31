@@ -4,11 +4,10 @@ A read-only Model Context Protocol (MCP) server for Day One journal on macOS. Ac
 
 ## Features
 
-- 📖 **Read recent entries** with full text and metadata
-- 🔍 **Search entries** by text content
-- 📚 **List journals** with statistics
-- 📊 **Count entries** across all or specific journals
-- 📅 **"On This Day"** - View entries from previous years
+- **Unified search** - Find entries with flexible filters (text, tags, starred, media, location, device, dates)
+- **List journals** - View all journals with statistics
+- **Browse recent** - Simply search with no filters
+- **"On This Day"** - Use date filters to view historical entries
 
 ## Prerequisites
 
@@ -66,67 +65,55 @@ Once configured, you can interact with Day One through natural language:
 
 ### Example Queries
 
-- **"Show me my recent journal entries"** - View latest entries
-- **"Search my journal for entries about vacation"** - Full-text search
-- **"Find starred entries tagged work from last month"** - Advanced filtered search
-- **"Show me all entries with photos from my iPhone"** - Media and device filter
-- **"Find vacation entries with location data"** - Combined filters
-- **"List my Day One journals"** - See all journals with stats
-- **"How many entries do I have?"** - Get total entry count
-- **"What did I write on June 14th in past years?"** - "On This Day" feature
+- **"Show me my recent journal entries"** - Browse recent (no filters)
+- **"Search my journal for entries about vacation"** - Text search
+- **"Find starred entries tagged work from last month"** - Multi-filter search
+- **"Show me all entries with photos from my iPhone"** - Media + device filter
+- **"What did I write on October 31st in past years?"** - Date filter for "On This Day"
+- **"List my Day One journals"** - View all journals with stats
 
 ## Available Tools
 
-### `read_recent_entries`
-Read recent journal entries with metadata and **text preview** (200 character limit).
+Just **2 simple tools**:
 
-**Parameters:**
-- `limit` (optional): Number of entries (1-50, default: 10)
-- `journal` (optional): Filter by journal name
+### 1. `search_entries`
+**One powerful tool** for all entry operations - search, browse, and filter.
 
-**Note:** Returns preview only to avoid overwhelming the display.
+Returns **FULL entry text** and all metadata.
 
-### `search_entries`
-Search journal entries with flexible filters, returns **text preview** (200 character limit).
+**All parameters are optional** - use none for browsing, use filters to narrow results:
 
-**Parameters:**
-- `text` (optional): Text to search for in entry content
-- `tags` (optional): List of tags (entry must have ALL tags)
-- `starred` (optional): Filter by starred status (true/false)
-- `has_photos` (optional): Filter entries with photo attachments
-- `has_videos` (optional): Filter entries with video attachments
-- `has_audio` (optional): Filter entries with audio recordings
-- `has_location` (optional): Filter entries with location data
-- `creation_device` (optional): Device type (e.g., "iPhone", "MacBook Pro", "iPad")
-- `date_from` (optional): Start date (YYYY-MM-DD format)
-- `date_to` (optional): End date (YYYY-MM-DD format)
-- `journal` (optional): Filter by journal name
-- `limit` (optional): Number of results (1-50, default: 20)
+- `text` - Text to search for in entry content
+- `tags` - List of tags (entry must have ALL specified tags)
+- `starred` - Filter by starred status (true/false)
+- `has_photos` - Filter entries with photo attachments
+- `has_videos` - Filter entries with video attachments
+- `has_audio` - Filter entries with audio recordings
+- `has_location` - Filter entries with location data
+- `creation_device` - Device type ("iPhone", "MacBook Pro", "iPad", "Apple Watch")
+- `date_from` - Start date (YYYY-MM-DD)
+- `date_to` - End date (YYYY-MM-DD)
+- `journal` - Journal name filter
+- `limit` - Number of results (1-50, default: 20)
 
-**All filters use AND logic** - results must match all specified criteria.
+**All filters use AND logic** - results must match all criteria.
 
 **Examples:**
-- Find starred entries with photos: `starred=true, has_photos=true`
-- Find work entries from iPhone last month: `tags=["work"], creation_device="iPhone", date_from="2025-01-01", date_to="2025-01-31"`
-- Find vacation entries with location: `text="vacation", has_location=true`
+```
+Browse recent: search_entries(limit=10)
+Text search: search_entries(text="vacation")
+Starred + photos: search_entries(starred=true, has_photos=true)
+"On This Day": search_entries(date_from="2020-10-31", date_to="2025-10-31")
+Multi-filter: search_entries(tags=["work"], creation_device="iPhone", date_from="2025-01-01")
+```
 
-### `list_journals`
-List all journals with entry counts and statistics.
+### 2. `list_journals`
+List all Day One journals with statistics.
 
-### `get_entry_count`
-Get total number of entries.
-
-**Parameters:**
-- `journal` (optional): Filter by journal name
-
-### `get_entries_by_date`
-Get "On This Day" entries from previous years with **FULL entry text** (no preview limit).
-
-**Parameters:**
-- `target_date`: Date in MM-DD or YYYY-MM-DD format (e.g., "06-14")
-- `years_back` (optional): Years to search back (1-20, default: 5)
-
-**Note:** Returns complete entry text for historical reflection and analysis.
+**Returns:**
+- Journal names
+- Entry counts per journal
+- Last entry date for each journal
 
 ## Database Location
 
