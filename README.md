@@ -5,7 +5,8 @@ A read-only Model Context Protocol (MCP) server for Day One journal on macOS. Ac
 ## Features
 
 - **Unified search** - Find entries with flexible filters (text, tags, starred, media, location, device, dates)
-- **Media attachments** - Access photos, videos, audio, and PDFs with full file paths
+- **View photos directly** - Claude can see and analyze photos from your journal entries via MCP resources
+- **Media attachments** - Access photos, videos, audio, and PDFs with full metadata
 - **Lazy loading** - Efficient performance with `include_tags` and `include_attachments` flags
 - **List journals** - View all journals with statistics
 - **Browse recent** - Simply search with no filters
@@ -98,7 +99,7 @@ Returns **FULL entry text** and all metadata.
 - `journal` - Journal name filter
 - `limit` - Number of results (1-50, default: 20)
 - `include_tags` - Include tag data in results (default: false, set to true only if needed for performance)
-- `include_attachments` - Include attachment/media file paths in results (default: false, set to true only if needed for performance)
+- `include_attachments` - Include attachment/media resources in results (default: false, set to true when you want to view photos/videos/audio)
 
 **All filters use AND logic** - results must match all criteria.
 
@@ -167,8 +168,9 @@ The test suite (`tests/test_all.py`) validates:
 4. Entry formatting (preview vs full text)
 5. Advanced search filters (text, starred, media, location, dates)
 6. Lazy loading and performance (include_tags, include_attachments)
-7. Attachment file verification
-8. Display integration with attachments
+7. Get entry by UUID (for resource retrieval)
+8. Attachment file verification
+9. Display integration with resource URIs
 
 
 ## License
