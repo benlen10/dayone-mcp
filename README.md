@@ -5,6 +5,8 @@ A read-only Model Context Protocol (MCP) server for Day One journal on macOS. Ac
 ## Features
 
 - **Unified search** - Find entries with flexible filters (text, tags, starred, media, location, device, dates)
+- **Media attachments** - Access photos, videos, audio, and PDFs with full file paths
+- **Lazy loading** - Efficient performance with `include_tags` and `include_attachments` flags
 - **List journals** - View all journals with statistics
 - **Browse recent** - Simply search with no filters
 - **"On This Day"** - Use date filters to view historical entries
@@ -95,6 +97,8 @@ Returns **FULL entry text** and all metadata.
 - `date_to` - End date (YYYY-MM-DD)
 - `journal` - Journal name filter
 - `limit` - Number of results (1-50, default: 20)
+- `include_tags` - Include tag data in results (default: false, set to true only if needed for performance)
+- `include_attachments` - Include attachment/media file paths in results (default: false, set to true only if needed for performance)
 
 **All filters use AND logic** - results must match all criteria.
 
@@ -103,8 +107,10 @@ Returns **FULL entry text** and all metadata.
 Browse recent: search_entries(limit=10)
 Text search: search_entries(text="vacation")
 Starred + photos: search_entries(starred=true, has_photos=true)
+With attachments: search_entries(has_photos=true, include_attachments=true)
+With tags: search_entries(text="vacation", include_tags=true)
 "On This Day": search_entries(date_from="2020-10-31", date_to="2025-10-31")
-Multi-filter: search_entries(tags=["work"], creation_device="iPhone", date_from="2025-01-01")
+Multi-filter: search_entries(tags=["work"], creation_device="iPhone", date_from="2025-01-01", include_tags=true)
 ```
 
 ### 2. `list_journals`
@@ -148,15 +154,21 @@ uv sync
 # Run server directly (for testing)
 uv run python -m dayone_mcp.server
 
-# Run tests
-uv run python tests/test_database.py
-
-# Test date-based queries
-uv run python tests/test_date_entries.py
-
-# Test full text display
-uv run python tests/test_full_text.py
+# Run comprehensive test suite
+uv run python tests/test_all.py
 ```
+
+### Test Coverage
+
+The test suite (`tests/test_all.py`) validates:
+1. Database connection and initialization
+2. Basic operations (read/search)
+3. Text extraction from rich text JSON and markdown
+4. Entry formatting (preview vs full text)
+5. Advanced search filters (text, starred, media, location, dates)
+6. Lazy loading and performance (include_tags, include_attachments)
+7. Attachment file verification
+8. Display integration with attachments
 
 
 ## License
