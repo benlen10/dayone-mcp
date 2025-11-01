@@ -501,6 +501,56 @@ class DayOneDatabase:
         conn.close()
         return journals
 
+    def get_entry_by_uuid(self, uuid: str, include_attachments: bool = True) -> Optional[dict[str, Any]]:
+        """Get a single entry by UUID.
+
+        Args:
+            uuid: Entry UUID
+            include_attachments: Fetch attachment data
+
+        Returns:
+            Entry dictionary or None if not found
+        """
+        conn = self._connect()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                e.ZUUID as uuid,
+                e.ZRICHTEXTJSON as rich_text,
+                e.ZMARKDOWNTEXT as markdown_text,
+                e.ZCREATIONDATE as creation_date,
+                e.ZMODIFIEDDATE as modified_date,
+                e.ZSTARRED as starred,
+                e.ZTIMEZONE as timezone,
+                j.ZNAME as journal_name
+            FROM ZENTRY e
+            LEFT JOIN ZJOURNAL j ON e.ZJOURNAL = j.Z_PK
+            WHERE e.ZUUID = ?
+        """, (uuid,))
+
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return None
+
+        entry = {
+            'uuid': row['uuid'],
+            'text': self._extract_text(row['rich_text'], row['markdown_text']),
+            'creation_date': self._core_data_to_datetime(row['creation_date']),
+            'modified_date': self._core_data_to_datetime(row['modified_date']) if row['modified_date'] else None,
+            'starred': bool(row['starred']),
+            'timezone': row['timezone'],
+            'journal_name': row['journal_name'] or 'Default'
+        }
+
+        if include_attachments:
+            attachments_by_entry = self._get_bulk_attachments(conn, [uuid])
+            entry['attachments'] = attachments_by_entry.get(uuid, [])
+
+        conn.close()
+        return entry
+
     def get_entry_count(self, journal: Optional[str] = None) -> int:
         """Get total entry count.
 

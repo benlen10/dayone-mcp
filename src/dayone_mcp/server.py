@@ -3,9 +3,11 @@
 import asyncio
 from typing import Any
 
+import base64
+
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.types import BlobResourceContents, ImageContent, Resource, TextContent, Tool
 from pydantic import BaseModel, Field
 
 from .database import DayOneDatabase
@@ -81,10 +83,16 @@ def format_entry(entry: dict[str, Any], full_text: bool = False) -> str:
             lines.append(f"Media: {' '.join(media_parts)}")
 
         # Add file paths for each attachment
-        for att in attachments:
+        for i, att in enumerate(attachments):
             if att['file_path']:
+                # Use actual filesystem path
+                file_path = att['file_path']
                 caption = f" - {att['caption']}" if att.get('caption') else ""
-                lines.append(f"  • {att['file_path']}{caption}")
+                att_type = att['type'].upper()
+                dimensions = ""
+                if att.get('width') and att.get('height'):
+                    dimensions = f" ({att['width']}x{att['height']})"
+                lines.append(f"  • [{att_type}{dimensions}] {file_path}{caption}")
 
     # Location indicator (always available from main query)
     if entry.get('has_location'):
@@ -120,6 +128,82 @@ async def list_tools() -> list[Tool]:
             inputSchema=ListJournalsArgs.model_json_schema()
         )
     ]
+
+
+@app.list_resources()
+async def list_resources() -> list[Resource]:
+    """List available resources (dynamically discovered from recent entries)."""
+    # We don't pre-list all resources since there could be thousands
+    # Resources are accessed on-demand via read_resource
+    return []
+
+
+@app.read_resource()
+async def read_resource(uri: str) -> BlobResourceContents | str:
+    """Read a resource by URI.
+
+    URI format: dayone://attachment/{entry_uuid}/{attachment_index}
+    """
+    if not uri.startswith("dayone://attachment/"):
+        raise ValueError(f"Invalid resource URI: {uri}")
+
+    try:
+        # Parse URI: dayone://attachment/{entry_uuid}/{attachment_index}
+        parts = uri.replace("dayone://attachment/", "").split("/")
+        if len(parts) != 2:
+            raise ValueError(f"Invalid resource URI format: {uri}")
+
+        entry_uuid = parts[0]
+        attachment_index = int(parts[1])
+
+        # Fetch the entry with attachments
+        entry = db.get_entry_by_uuid(entry_uuid, include_attachments=True)
+
+        if not entry:
+            raise ValueError(f"Entry not found: {entry_uuid}")
+
+        attachments = entry.get('attachments', [])
+        if attachment_index >= len(attachments):
+            raise ValueError(f"Attachment index {attachment_index} out of range")
+
+        attachment = attachments[attachment_index]
+        file_path = attachment.get('file_path')
+        file_type = attachment.get('type', '')
+
+        if not file_path:
+            raise ValueError(f"Attachment file not found")
+
+        # Determine MIME type
+        mime_types = {
+            'jpeg': 'image/jpeg',
+            'jpg': 'image/jpeg',
+            'png': 'image/png',
+            'heic': 'image/heic',
+            'gif': 'image/gif',
+            'mp4': 'video/mp4',
+            'mov': 'video/quicktime',
+            'avi': 'video/x-msvideo',
+            'pdf': 'application/pdf',
+            'm4a': 'audio/mp4',
+            'mp3': 'audio/mpeg',
+            'wav': 'audio/wav'
+        }
+        mime_type = mime_types.get(file_type.lower(), 'application/octet-stream')
+
+        # Read and encode the file
+        with open(file_path, 'rb') as f:
+            file_data = f.read()
+            encoded_data = base64.b64encode(file_data).decode('utf-8')
+
+        # Return BlobResourceContents
+        return BlobResourceContents(
+            uri=uri,
+            mimeType=mime_type,
+            blob=encoded_data
+        )
+
+    except Exception as e:
+        raise ValueError(f"Failed to read resource {uri}: {str(e)}")
 
 
 @app.call_tool()
