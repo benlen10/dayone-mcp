@@ -223,10 +223,59 @@ def test_lazy_loading_performance(db):
     return True
 
 
-def test_attachment_file_verification(db):
-    """Test 7: Verify attachment file paths exist."""
+def test_get_entry_by_uuid(db):
+    """Test 7: Get entry by UUID for resource retrieval."""
     print("\n" + "=" * 70)
-    print("TEST 7: Attachment File Verification")
+    print("TEST 7: Get Entry by UUID")
+    print("=" * 70)
+
+    # First get a recent entry with attachments
+    entries = db.search_entries(has_photos=True, limit=1, include_attachments=True)
+
+    if not entries:
+        print("⚠ No entries with photos found to test")
+        return True
+
+    test_entry = entries[0]
+    test_uuid = test_entry['uuid']
+
+    print(f"Testing UUID lookup for: {test_uuid}")
+
+    # Test 1: Fetch entry without attachments
+    entry_no_att = db.get_entry_by_uuid(test_uuid, include_attachments=False)
+    if entry_no_att:
+        print(f"✓ Retrieved entry without attachments")
+        print(f"  - Has 'attachments' key: {'attachments' in entry_no_att}")
+    else:
+        print(f"✗ Failed to retrieve entry by UUID")
+        return False
+
+    # Test 2: Fetch entry with attachments
+    entry_with_att = db.get_entry_by_uuid(test_uuid, include_attachments=True)
+    if entry_with_att and 'attachments' in entry_with_att:
+        attachments = entry_with_att['attachments']
+        print(f"✓ Retrieved entry with {len(attachments)} attachment(s)")
+        for i, att in enumerate(attachments):
+            print(f"  - Attachment {i}: {att['type']}, path exists: {att['file_path'] is not None}")
+    else:
+        print(f"✗ Failed to retrieve entry with attachments")
+        return False
+
+    # Test 3: Try non-existent UUID
+    fake_entry = db.get_entry_by_uuid("00000000-0000-0000-0000-000000000000")
+    if fake_entry is None:
+        print(f"✓ Correctly returns None for non-existent UUID")
+    else:
+        print(f"✗ Should return None for non-existent UUID")
+        return False
+
+    return True
+
+
+def test_attachment_file_verification(db):
+    """Test 8: Verify attachment file paths exist."""
+    print("\n" + "=" * 70)
+    print("TEST 8: Attachment File Verification")
     print("=" * 70)
 
     entries = db.search_entries(has_photos=True, limit=3, include_attachments=True)
@@ -254,9 +303,9 @@ def test_attachment_file_verification(db):
 
 
 def test_format_entry_with_attachments(db):
-    """Test 8: Entry formatting with attachments."""
+    """Test 9: Entry formatting with attachments."""
     print("\n" + "=" * 70)
-    print("TEST 8: Format Entry with Attachments")
+    print("TEST 9: Format Entry with Attachments")
     print("=" * 70)
 
     entries = db.search_entries(has_photos=True, limit=2, include_attachments=True, include_tags=True)
@@ -294,6 +343,7 @@ def main():
             ("Entry Formatting", lambda: test_format_display(db)),
             ("Search Filters", lambda: test_search_filters(db)),
             ("Lazy Loading & Performance", lambda: test_lazy_loading_performance(db)),
+            ("Get Entry by UUID", lambda: test_get_entry_by_uuid(db)),
             ("Attachment File Verification", lambda: test_attachment_file_verification(db)),
             ("Format Entry with Attachments", lambda: test_format_entry_with_attachments(db))
         ]
