@@ -158,24 +158,6 @@ uv run python tests/test_date_entries.py
 uv run python tests/test_full_text.py
 ```
 
-## Project Structure
-
-```
-dayone-mcp/
-├── src/
-│   └── dayone_mcp/
-│       ├── __init__.py       # Package metadata
-│       ├── database.py       # Database access layer
-│       └── server.py         # MCP server implementation
-├── tests/
-│   ├── test_database.py      # Database connection tests
-│   ├── test_date_entries.py  # Date query tests
-│   └── test_full_text.py     # Text extraction tests
-├── pyproject.toml            # Project configuration
-├── README.md                 # This file
-├── CLAUDE.md                 # Claude Code guidance
-└── BEEKEEPER_GUIDE.md        # Beekeeper Studio SQL guide
-```
 
 ## License
 

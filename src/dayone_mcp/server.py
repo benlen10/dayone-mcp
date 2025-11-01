@@ -25,6 +25,8 @@ class SearchEntriesArgs(BaseModel):
     date_to: str = Field(default="", description="End date YYYY-MM-DD")
     journal: str = Field(default="", description="Journal name to filter by")
     limit: int = Field(default=20, ge=1, le=50, description="Number of results (1-50)")
+    include_tags: bool = Field(default=False, description="Include tag data in results (set to true only if user asks for tags)")
+    include_attachments: bool = Field(default=False, description="Include attachment/media file paths in results (set to true only if user asks for photos, videos, audio, or media)")
 
 
 class ListJournalsArgs(BaseModel):
@@ -51,10 +53,41 @@ def format_entry(entry: dict[str, Any], full_text: bool = False) -> str:
     if entry['starred']:
         lines[0] += " ⭐"
 
+    # Tags (only if included in query)
     if entry.get('tags'):
         lines.append(f"Tags: {', '.join(f'#{tag}' for tag in entry['tags'])}")
 
-    if entry['has_location']:
+    # Attachments (only if included in query)
+    if entry.get('attachments'):
+        attachments = entry['attachments']
+
+        # Count by type
+        photos = [a for a in attachments if a['type'] in ('jpeg', 'png', 'heic', 'gif')]
+        videos = [a for a in attachments if a['type'] in ('mp4', 'mov', 'avi')]
+        audios = [a for a in attachments if a.get('duration') and a['type'] not in ('mp4', 'mov', 'avi')]
+        pdfs = [a for a in attachments if a['type'] == 'pdf']
+
+        media_parts = []
+        if photos:
+            media_parts.append(f"📷×{len(photos)}")
+        if videos:
+            media_parts.append(f"🎥×{len(videos)}")
+        if audios:
+            media_parts.append(f"🎵×{len(audios)}")
+        if pdfs:
+            media_parts.append(f"📄×{len(pdfs)}")
+
+        if media_parts:
+            lines.append(f"Media: {' '.join(media_parts)}")
+
+        # Add file paths for each attachment
+        for att in attachments:
+            if att['file_path']:
+                caption = f" - {att['caption']}" if att.get('caption') else ""
+                lines.append(f"  • {att['file_path']}{caption}")
+
+    # Location indicator (always available from main query)
+    if entry.get('has_location'):
         lines.append("📍 Has location")
 
     if entry.get('years_ago') is not None and entry['years_ago'] > 0:
@@ -109,7 +142,9 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                 date_from=args.date_from if args.date_from else None,
                 date_to=args.date_to if args.date_to else None,
                 journal=args.journal if args.journal else None,
-                limit=args.limit
+                limit=args.limit,
+                include_tags=args.include_tags,
+                include_attachments=args.include_attachments
             )
 
             if not entries:

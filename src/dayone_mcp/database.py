@@ -110,6 +110,113 @@ class DayOneDatabase:
         """, (entry_uuid,))
         return [row[0] for row in cursor.fetchall()]
 
+    def _get_bulk_tags(self, conn: sqlite3.Connection, entry_uuids: list[str]) -> dict[str, list[str]]:
+        """Get tags for multiple entries in a single query.
+
+        Args:
+            conn: Database connection
+            entry_uuids: List of entry UUIDs
+
+        Returns:
+            Dictionary mapping entry UUID to list of tag names
+        """
+        if not entry_uuids:
+            return {}
+
+        cursor = conn.cursor()
+        placeholders = ','.join('?' * len(entry_uuids))
+        cursor.execute(f"""
+            SELECT e.ZUUID, t.ZNAME
+            FROM ZTAG t
+            JOIN Z_16TAGS zt ON t.Z_PK = zt.Z_60TAGS1
+            JOIN ZENTRY e ON zt.Z_16ENTRIES = e.Z_PK
+            WHERE e.ZUUID IN ({placeholders})
+            ORDER BY e.ZUUID, t.ZNAME
+        """, entry_uuids)
+
+        # Group tags by entry UUID
+        tags_by_entry = {}
+        for row in cursor.fetchall():
+            uuid = row[0]
+            tag = row[1]
+            if uuid not in tags_by_entry:
+                tags_by_entry[uuid] = []
+            tags_by_entry[uuid].append(tag)
+
+        return tags_by_entry
+
+    def _get_bulk_attachments(self, conn: sqlite3.Connection, entry_uuids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        """Get attachments for multiple entries in a single query.
+
+        Args:
+            conn: Database connection
+            entry_uuids: List of entry UUIDs
+
+        Returns:
+            Dictionary mapping entry UUID to list of attachment dictionaries
+        """
+        if not entry_uuids:
+            return {}
+
+        base_path = Path.home() / "Library/Group Containers/5U8NS4GX82.dayoneapp2/Data/Documents"
+
+        cursor = conn.cursor()
+        placeholders = ','.join('?' * len(entry_uuids))
+        cursor.execute(f"""
+            SELECT
+                e.ZUUID,
+                a.ZIDENTIFIER,
+                a.ZTYPE,
+                a.ZMD5,
+                a.ZWIDTH,
+                a.ZHEIGHT,
+                a.ZDURATION,
+                a.ZCAPTION,
+                a.ZISRECORDING
+            FROM ZATTACHMENT a
+            JOIN ZENTRY e ON a.ZENTRY = e.Z_PK
+            WHERE e.ZUUID IN ({placeholders})
+            ORDER BY e.ZUUID, a.ZORDERINENTRY
+        """, entry_uuids)
+
+        # Group attachments by entry UUID
+        attachments_by_entry = {}
+        for row in cursor.fetchall():
+            entry_uuid = row[0]
+            attachment_type = row[2]
+            md5 = row[3]
+
+            # Determine media directory based on type
+            if attachment_type in ('jpeg', 'png', 'heic', 'gif'):
+                media_dir = 'DayOnePhotos'
+            elif attachment_type in ('mp4', 'mov', 'avi'):
+                media_dir = 'DayOneVideos'
+            elif row[8]:  # ZISRECORDING
+                media_dir = 'DayOneAudios'
+            elif attachment_type == 'pdf':
+                media_dir = 'DayOnePDFAttachments'
+            else:
+                media_dir = 'DayOnePhotos'  # Default fallback
+
+            # Build file path
+            file_path = base_path / media_dir / f"{md5}.{attachment_type}" if md5 else None
+
+            attachment = {
+                'identifier': row[1],
+                'type': attachment_type,
+                'file_path': str(file_path) if file_path and file_path.exists() else None,
+                'width': row[4],
+                'height': row[5],
+                'duration': row[6],
+                'caption': row[7]
+            }
+
+            if entry_uuid not in attachments_by_entry:
+                attachments_by_entry[entry_uuid] = []
+            attachments_by_entry[entry_uuid].append(attachment)
+
+        return attachments_by_entry
+
     def read_recent_entries(self, limit: int = 10, journal: Optional[str] = None) -> list[dict[str, Any]]:
         """Read recent journal entries.
 
@@ -183,7 +290,9 @@ class DayOneDatabase:
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
         journal: Optional[str] = None,
-        limit: int = 20
+        limit: int = 20,
+        include_tags: bool = False,
+        include_attachments: bool = False
     ) -> list[dict[str, Any]]:
         """Search entries with flexible filters.
 
@@ -200,6 +309,8 @@ class DayOneDatabase:
             date_to: End date (YYYY-MM-DD)
             journal: Journal name filter
             limit: Maximum results (1-50)
+            include_tags: Fetch tag data for entries (default False for performance)
+            include_attachments: Fetch attachment/media data for entries (default False for performance)
 
         Returns:
             List of matching entries
@@ -324,20 +435,33 @@ class DayOneDatabase:
         params.append(limit)
 
         cursor.execute(query, params)
+        rows = cursor.fetchall()
+
+        # Bulk fetch optional data if requested
+        entry_uuids = [row['uuid'] for row in rows]
+        tags_by_entry = self._get_bulk_tags(conn, entry_uuids) if include_tags else {}
+        attachments_by_entry = self._get_bulk_attachments(conn, entry_uuids) if include_attachments else {}
 
         # Build results
         entries = []
-        for row in cursor.fetchall():
+        for row in rows:
+            uuid = row['uuid']
             entry = {
-                'uuid': row['uuid'],
+                'uuid': uuid,
                 'text': self._extract_text(row['rich_text'], row['markdown_text']),
                 'creation_date': self._core_data_to_datetime(row['creation_date']),
                 'modified_date': self._core_data_to_datetime(row['modified_date']) if row['modified_date'] else None,
                 'starred': bool(row['starred']),
                 'timezone': row['timezone'],
-                'journal_name': row['journal_name'] or 'Default',
-                'tags': self._get_entry_tags(conn, row['uuid'])
+                'journal_name': row['journal_name'] or 'Default'
             }
+
+            # Add optional fields only if requested
+            if include_tags:
+                entry['tags'] = tags_by_entry.get(uuid, [])
+            if include_attachments:
+                entry['attachments'] = attachments_by_entry.get(uuid, [])
+
             entries.append(entry)
 
         conn.close()
